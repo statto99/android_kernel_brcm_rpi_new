@@ -137,7 +137,6 @@ jobs:
           # This tells the compiler that the binary IS the function 'kpatch_init'
           aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
             --redefine-sym _binary_init_kpimg_android_start=kpatch_init \
-            --redefine-sym _binary_init_kpimg_android_end=kpatch_hook_exec \
             init/kpimg-android init/kpimg-android.o
 
           # STEP B: Automated Surgery on main.c
