@@ -40,8 +40,10 @@ jobs:
           sed -i '/CONFIG_STRICT_MODULE_RWX/d' build_dir/.config
 
           # 3. FIRMWARE PATH FIX (Stops the regulatory.db error)
-          ./scripts/config --file build_dir/.config --set-str CONFIG_EXTRA_FIRMWARE ""
-          ./scripts/config --file build_dir/.config --disable CONFIG_EXTRA_FIRMWARE_BUNDLE
+          ./scripts/config --file build_dir/.config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s"
+          ./scripts/config --file build_dir/.config --set-str CONFIG_EXTRA_FIRMWARE_DIR "firmware"
+          ./scripts/config --file build_dir/.config --enable CONFIG_CFG80211_INTERNAL_REGDB
+          ./scripts/config --file build_dir/.config --disable CONFIG_CFG80211_REQUIRE_SIGNED_REGDB
 
           # 4. YOUR ORIGINAL RESEARCH LIST
           ./scripts/config --file build_dir/.config --enable CONFIG_DEBUG_FS
