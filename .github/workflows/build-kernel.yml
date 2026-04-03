@@ -133,22 +133,21 @@ jobs:
           export CROSS_COMPILE="ccache aarch64-linux-gnu-"
           export CCACHE_DIR=/home/runner/.ccache
 
-          # 1. Convert the APatch binary to a linkable object
-          # (Ensure 'kpimg-android' is in your 'init/' folder)
+          # 1. Convert the APatch binary
           aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 init/kpimg-android init/kpimg-android.o
 
           # 2. Patch init/main.c
-          # Place the declaration at line 20 (top) and the call at the end of start_kernel
-          sed -i '20i extern void kpatch_init(void);' init/main.c
+          # Insert declaration after the first include and the call at the end of start_kernel
+          sed -i '1?^?extern void kpatch_init(void);\n?' init/main.c
           sed -i '/prevent_tail_call_optimization();/a \    kpatch_init();' init/main.c
 
           # 3. Patch fs/exec.c
-          # Place the declaration at line 20 (top) 
-          # Place the hook call ONLY after the buffer is cleared in begin_new_exec
-          sed -i '20i extern void kpatch_hook_exec(void *bprm);' fs/exec.c
+          # Insert declaration at the very top of the file
+          sed -i '1?^?extern void kpatch_hook_exec(void *bprm);\n?' fs/exec.c
+          # Insert the hook ONLY inside the begin_new_exec function (surgical strike)
           sed -i '/memset(bprm->buf, 0, BINPRM_BUF_SIZE);/a \    kpatch_hook_exec(bprm);' fs/exec.c
 
-          # 4. Run the build
+          # 4. Build
           make O=build_dir -j$(nproc) Image modules dtbs
 
       - name: Package for SD Card
