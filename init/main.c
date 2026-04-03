@@ -112,7 +112,6 @@
 
 #include <kunit/test.h>
 
-extern void kpatch_init(void);
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
@@ -1138,9 +1137,6 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	arch_call_rest_init();
 
 	prevent_tail_call_optimization();
-	
-	// APatch Trigger
-	kpatch_init();
 }
 
 /* Call all constructor functions linked into the kernel. */
