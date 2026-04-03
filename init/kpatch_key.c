@@ -1,6 +1,9 @@
 #include <linux/init.h>
 
-char *kpatch_superkey = "Test123";
+char *kpatch_superkey = "Test123"; // Your password
 int kpatch_has_key = 1;
-// Add this line to satisfy any other missing references
-void kpatch_hook_exec(void *bprm) { }
+
+// This stops the "PC : kpatch_has_key+0x0/0x8" crash
+void kpatch_hook_exec(void *bprm) {
+    return;
+}
