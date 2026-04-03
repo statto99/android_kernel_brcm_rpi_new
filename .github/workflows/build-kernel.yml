@@ -133,21 +133,19 @@ jobs:
           export CROSS_COMPILE="ccache aarch64-linux-gnu-"
           export CCACHE_DIR=/home/runner/.ccache
 
-          # 1. Convert the APatch binary
-          # This creates the .o file from your raw 'init/kpimg-android'
-          aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 init/kpimg-android init/kpimg-android.o
+          # 1. Convert the APatch binary AND define the symbols
+          # We take the binary start point and name it 'kpatch_init' and 'kpatch_hook_exec'
+          aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
+            --redefine-sym _binary_init_kpimg_android_start=kpatch_init \
+            --redefine-sym _binary_init_kpimg_android_end=kpatch_hook_exec \
+            init/kpimg-android init/kpimg-android.o
 
           # 2. Patch init/main.c
-          # Insert declaration at the very first line
           sed -i '1i extern void kpatch_init(void);' init/main.c
-          # Insert the call after the prevent_tail_call line
           sed -i '/prevent_tail_call_optimization();/a \    kpatch_init();' init/main.c
 
           # 3. Patch fs/exec.c
-          # Insert declaration at the very first line
           sed -i '1i extern void kpatch_hook_exec(void *bprm);' fs/exec.c
-          # Insert the hook ONLY inside the begin_new_exec function
-          # This specifically targets the line where the buffer is cleared
           sed -i '/memset(bprm->buf, 0, BINPRM_BUF_SIZE);/a \    kpatch_hook_exec(bprm);' fs/exec.c
 
           # 4. Final Build
