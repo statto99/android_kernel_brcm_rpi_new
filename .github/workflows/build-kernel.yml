@@ -127,28 +127,32 @@ jobs:
           fi
           echo "Verification successful."
 
-      - name: Build
+      - name: Build and Patch
         run: |
           export ARCH=arm64
           export CROSS_COMPILE="ccache aarch64-linux-gnu-"
           export CCACHE_DIR=/home/runner/.ccache
 
-          # 1. Convert the APatch binary AND define the symbols
-          # We take the binary start point and name it 'kpatch_init' and 'kpatch_hook_exec'
+          # STEP A: Create the "Bridge" between the binary and the code
+          # This tells the compiler that the binary IS the function 'kpatch_init'
           aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
             --redefine-sym _binary_init_kpimg_android_start=kpatch_init \
             --redefine-sym _binary_init_kpimg_android_end=kpatch_hook_exec \
             init/kpimg-android init/kpimg-android.o
 
-          # 2. Patch init/main.c
+          # STEP B: Automated Surgery on main.c
+          # 1. Put the 'extern' declaration on Line 1
           sed -i '1i extern void kpatch_init(void);' init/main.c
+          # 2. Find the specific 'prevent' line and add the call right after it
           sed -i '/prevent_tail_call_optimization();/a \    kpatch_init();' init/main.c
 
-          # 3. Patch fs/exec.c
+          # STEP C: Automated Surgery on exec.c
+          # 1. Put the 'extern' declaration on Line 1
           sed -i '1i extern void kpatch_hook_exec(void *bprm);' fs/exec.c
+          # 2. Find the specific 'memset' line and add the hook right after it
           sed -i '/memset(bprm->buf, 0, BINPRM_BUF_SIZE);/a \    kpatch_hook_exec(bprm);' fs/exec.c
 
-          # 4. Final Build
+          # STEP D: Final Compilation
           make O=build_dir -j$(nproc) Image modules dtbs
 
       - name: Package for SD Card
