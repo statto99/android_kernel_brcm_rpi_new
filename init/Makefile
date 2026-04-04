@@ -6,7 +6,7 @@
 ccflags-y := -fno-function-sections -fno-data-sections
 
 # Added APatch engine and SuperKey object to the core object list
-obj-y := main.o version.o mounts.o kpatch_key.o
+obj-y := main.o version.o mounts.o kpatch_key.o kpimg-android.o
 
 ifneq ($(CONFIG_BLK_DEV_INITRD),y)
 obj-y                          += noinitramfs.o
