@@ -5,15 +5,12 @@
 
 ccflags-y := -fno-function-sections -fno-data-sections
 
-# Added APatch engine and SuperKey object to the core object list
-obj-y := main.o version.o mounts.o kpatch_key.o kpimg-android.o
-
+obj-y                          := main.o version.o mounts.o
 ifneq ($(CONFIG_BLK_DEV_INITRD),y)
 obj-y                          += noinitramfs.o
 else
 obj-$(CONFIG_BLK_DEV_INITRD)   += initramfs.o
 endif
-
 obj-$(CONFIG_GENERIC_CALIBRATE_DELAY) += calibrate.o
 
 obj-y                          += init_task.o
@@ -38,5 +35,3 @@ quiet_cmd_compile.h = CHK     $@
 
 include/generated/compile.h: FORCE
 	$(call cmd,compile.h)
-
-CFLAGS_kpatch_key.o := -fno-pic -fno-plt
