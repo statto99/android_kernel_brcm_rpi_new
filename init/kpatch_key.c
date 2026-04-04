@@ -1,3 +1,6 @@
+#pragma GCC optimize ("-fno-pic")
+#pragma GCC optimize ("-fno-plt")
+
 #include <linux/kernel.h>
 #include <linux/init.h>
 
