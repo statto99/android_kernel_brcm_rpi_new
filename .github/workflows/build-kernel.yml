@@ -132,9 +132,6 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE="ccache aarch64-linux-gnu-"
           export CCACHE_DIR=/home/runner/.ccache
-          
-          # Fix the GOT/PLT error by forcing No-PIC (Position Independent Code)
-          export KCFLAGS="-fno-pic -fno-plt"
 
           # STEP A: Create the Bridge
           aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
