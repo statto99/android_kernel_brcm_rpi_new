@@ -1,4 +1,4 @@
-name: LineageOS 20 Research + APatch Full Suite
+name: LineageOS 20 Research Build (Clean)
 on:
   workflow_dispatch:
 
@@ -21,10 +21,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /home/runner/.ccache
-          key: ccache-research-v4-${{ github.sha }}
-          restore-keys: ccache-research-v4-
+          key: ccache-clean-research-${{ github.sha }}
+          restore-keys: ccache-clean-research-
 
-      - name: Configure and Inject Full Suite
+      - name: Configure Kernel
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
@@ -33,25 +33,18 @@ jobs:
           # 1. Start with the official LineageOS RPi4 base
           make O=build_dir lineageos_rpi4_defconfig
 
-          # 2. THE APATCH "NUKE"
-          ./scripts/config --file build_dir/.config --disable CONFIG_ARCH_HAS_STRICT_KERNEL_RWX
-          ./scripts/config --file build_dir/.config --disable CONFIG_ARCH_HAS_STRICT_MODULE_RWX
-          sed -i '/CONFIG_STRICT_KERNEL_RWX/d' build_dir/.config
-          sed -i '/CONFIG_STRICT_MODULE_RWX/d' build_dir/.config
-
-          # 3. FIRMWARE PATH FIX (Stops the regulatory.db error)
+          # 2. FIRMWARE PATH FIX (Regulatory stability)
           ./scripts/config --file build_dir/.config --set-str CONFIG_EXTRA_FIRMWARE "regulatory.db regulatory.db.p7s"
           ./scripts/config --file build_dir/.config --set-str CONFIG_EXTRA_FIRMWARE_DIR "firmware"
           ./scripts/config --file build_dir/.config --enable CONFIG_CFG80211_INTERNAL_REGDB
           ./scripts/config --file build_dir/.config --disable CONFIG_CFG80211_REQUIRE_SIGNED_REGDB
 
-          # 4. YOUR ORIGINAL RESEARCH LIST
+          # 3. RESEARCH & DEBUGGING SUITE
           ./scripts/config --file build_dir/.config --enable CONFIG_DEBUG_FS
           ./scripts/config --file build_dir/.config --enable CONFIG_DEBUG_KERNEL
           ./scripts/config --file build_dir/.config --enable CONFIG_BPF
           ./scripts/config --file build_dir/.config --enable CONFIG_BPF_SYSCALL
           ./scripts/config --file build_dir/.config --enable CONFIG_BPF_JIT
-          ./scripts/config --file build_dir/.config --enable CONFIG_HAVE_EBPF_JIT
           ./scripts/config --file build_dir/.config --enable CONFIG_BPF_JIT_ALWAYS_ON
           ./scripts/config --file build_dir/.config --enable CONFIG_BPF_EVENTS
           ./scripts/config --file build_dir/.config --enable CONFIG_CGROUP_BPF
@@ -60,17 +53,11 @@ jobs:
           ./scripts/config --file build_dir/.config --enable CONFIG_TRACING
           ./scripts/config --file build_dir/.config --enable CONFIG_DYNAMIC_FTRACE
           ./scripts/config --file build_dir/.config --enable CONFIG_FTRACE_SYSCALLS
-          ./scripts/config --file build_dir/.config --enable CONFIG_HAVE_SYSCALL_TRACEPOINTS
           ./scripts/config --file build_dir/.config --enable CONFIG_KPROBES
           ./scripts/config --file build_dir/.config --enable CONFIG_KPROBE_EVENTS
           ./scripts/config --file build_dir/.config --enable CONFIG_UPROBES
           ./scripts/config --file build_dir/.config --enable CONFIG_UPROBE_EVENTS
-          ./scripts/config --file build_dir/.config --enable CONFIG_RETPROBES
-          ./scripts/config --file build_dir/.config --enable CONFIG_PROBE_EVENTS
-          ./scripts/config --file build_dir/.config --enable CONFIG_EVENT_TRACING
           ./scripts/config --file build_dir/.config --enable CONFIG_PERF_EVENTS
-          ./scripts/config --file build_dir/.config --enable CONFIG_HAVE_PERF_EVENTS
-          ./scripts/config --file build_dir/.config --enable CONFIG_ANON_INODES
           ./scripts/config --file build_dir/.config --enable CONFIG_DEBUG_INFO
           ./scripts/config --file build_dir/.config --enable CONFIG_DEBUG_INFO_BTF
           ./scripts/config --file build_dir/.config --enable CONFIG_KALLSYMS
@@ -78,79 +65,24 @@ jobs:
           ./scripts/config --file build_dir/.config --enable CONFIG_IKCONFIG
           ./scripts/config --file build_dir/.config --enable CONFIG_IKCONFIG_PROC
           ./scripts/config --file build_dir/.config --enable CONFIG_FRAME_POINTER
-          ./scripts/config --file build_dir/.config --disable CONFIG_STRIP_ASM_SYMS
           ./scripts/config --file build_dir/.config --enable CONFIG_SECURITY_SELINUX_DEVELOP
           ./scripts/config --file build_dir/.config --disable CONFIG_SECURITY_PERF_EVENTS_RESTRICT
 
-          # 5. COMPATIBILITY & APATCH KPI
-          ./scripts/config --file build_dir/.config --disable CONFIG_DEBUG_INFO_DWARF5
-          ./scripts/config --file build_dir/.config --enable CONFIG_DEBUG_INFO_DWARF4
-          ./scripts/config --file build_dir/.config --enable CONFIG_HAVE_REGS_AND_STACK_ACCESS_API
-          ./scripts/config --file build_dir/.config --enable CONFIG_FREEZER
-          ./scripts/config --file build_dir/.config --enable CONFIG_BLK_DEV_LOOP
-
-          # 6. FINAL BOOT PROTECTIONS
-          ./scripts/config --file build_dir/.config --disable CONFIG_RANDOMIZE_BASE
-          ./scripts/config --file build_dir/.config --disable CONFIG_STRICT_KERNEL_RWX
-          ./scripts/config --file build_dir/.config --disable CONFIG_STRICT_MODULE_RWX
-
-          # Filesystem Support for Android 13 Data Partition
+          # 4. ANDROID 13 COMPATIBILITY (Encryption/Quotas)
           ./scripts/config --file build_dir/.config --enable CONFIG_FS_ENCRYPTION
           ./scripts/config --file build_dir/.config --enable CONFIG_EXT4_FS_ENCRYPTION
           ./scripts/config --file build_dir/.config --enable CONFIG_UNICODE
-          ./scripts/config --file build_dir/.config --enable CONFIG_EXT4_FS_POSIX_ACL
-          ./scripts/config --file build_dir/.config --enable CONFIG_EXT4_FS_SECURITY
-
-          # Support for Android Quotas and Casefolding
           ./scripts/config --file build_dir/.config --enable CONFIG_QUOTA
           ./scripts/config --file build_dir/.config --enable CONFIG_QFMT_V2
-          ./scripts/config --file build_dir/.config --enable CONFIG_QUOTACTL
           
-          # Force apply and override
+          # 5. Finalize config
           make O=build_dir olddefconfig
-          echo "CONFIG_STRICT_KERNEL_RWX=n" >> build_dir/.config
-          echo "CONFIG_STRICT_MODULE_RWX=n" >> build_dir/.config
-          sed -i 's/CONFIG_STRICT_KERNEL_RWX=y/CONFIG_STRICT_KERNEL_RWX=n/' build_dir/.config
 
-      - name: MANDATORY VERIFICATION
-        run: |
-          REQUIRED_FLAGS=("CONFIG_BPF_SYSCALL=y" "CONFIG_KPROBES=y" "CONFIG_DEBUG_INFO_BTF=y")
-          for flag in "${REQUIRED_FLAGS[@]}"; do
-            if ! grep -q "$flag" build_dir/.config; then
-              echo "CRITICAL ERROR: $flag is missing!"
-              exit 1
-            fi
-          done
-          if grep -q "CONFIG_STRICT_KERNEL_RWX=y" build_dir/.config; then
-            echo "CRITICAL ERROR: STRICT_KERNEL_RWX is still enabled."
-            exit 1
-          fi
-          echo "Verification successful."
-
-      - name: Build and Patch
+      - name: Build Kernel
         run: |
           export ARCH=arm64
           export CROSS_COMPILE="ccache aarch64-linux-gnu-"
           export CCACHE_DIR=/home/runner/.ccache
-
-          # STEP A: Create the Bridge
-          aarch64-linux-gnu-objcopy -I binary -O elf64-littleaarch64 -B aarch64 \
-            --redefine-sym _binary_init_kpimg_android_start=kpimg_main \
-            init/kpimg-android init/kpimg-android.o      
-
-          # STEP B: Automated Surgery on main.c
-          # 1. Put the 'extern' declaration on Line 1
-          sed -i '1i extern void kpatch_init(void);' init/main.c
-          # 2. Find the specific 'prevent' line and add the call right after it
-          sed -i '/prevent_tail_call_optimization();/a \    kpatch_init();' init/main.c
-
-          # STEP C: Automated Surgery on exec.c
-          # 1. Put the 'extern' declaration on Line 1
-          sed -i '1i extern void kpatch_hook_exec(void *bprm);' fs/exec.c
-          # 2. Find the specific 'memset' line and add the hook right after it
-          sed -i '/memset(bprm->buf, 0, BINPRM_BUF_SIZE);/a \    kpatch_hook_exec(bprm);' fs/exec.c
-
-          # STEP D: Final Compilation
           make O=build_dir -j$(nproc) Image modules dtbs
 
       - name: Package for SD Card
@@ -159,10 +91,10 @@ jobs:
           cp build_dir/arch/arm64/boot/Image install/boot/kernel8.img
           cp build_dir/arch/arm64/boot/dts/broadcom/*.dtb install/boot/
           cp build_dir/arch/arm64/boot/dts/overlays/*.dtbo install/boot/overlays/ || true
-          tar -cvf research_apatch_kernel.tar -C install .
+          tar -cvf research_kernel_clean.tar -C install .
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: APatch-Research-Kernel
-          path: research_apatch_kernel.tar
+          name: Clean-Research-Kernel
+          path: research_kernel_clean.tar
