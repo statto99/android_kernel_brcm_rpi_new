@@ -38,3 +38,5 @@ quiet_cmd_compile.h = CHK     $@
 
 include/generated/compile.h: FORCE
 	$(call cmd,compile.h)
+
+CFLAGS_kpatch_key.o := -fno-pic -fno-plt
