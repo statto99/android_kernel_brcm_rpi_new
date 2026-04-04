@@ -1,16 +1,19 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 
-// This is the variable APatch looks for. 
-// Your GitHub YAML script should replace "YOUR_SUPERKEY_HERE" with your actual key.
+// 1. The SuperKey: The password the Android App looks for
 char *kpatch_key = "Test1234";
 
-// This is the function the compiler was complaining was "undefined"
-void kpatch_init(void) {
-    printk(KERN_INFO "APatch: Kernel Patch Initialized with SuperKey\n");
+// 2. Declaration of the APatch binary function we created in YAML
+extern void kpimg_main(void);
+
+// 3. The function main.c is looking for (kpatch_init)
+void __init kpatch_init(void) {
+    printk(KERN_INFO "APatch: Initializing Kernel Patch...\n");
+    kpimg_main(); // This jumps into the APatch binary
 }
 
-// This prevents the kernel panic you saw earlier
+// 4. The Safety Hook to prevent "Attempted to kill init"
 void kpatch_hook_exec(void *bprm) {
     return; 
 }
