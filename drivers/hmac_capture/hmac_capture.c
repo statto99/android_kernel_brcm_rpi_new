@@ -2,18 +2,32 @@
 #include <linux/init.h>
 #include <linux/sched.h>
 #include <linux/kprobes.h>
+#include <asm/ptrace.h>
 
 #define TARGET_COMM "ar.tvplayer.tv"
+#define ANON_SIZE   0x78000
 
 static int fired = 0;
 
 static int mmap_handler(struct kprobe *kp, struct pt_regs *regs)
 {
-    if (fired > 10) return 0;
+    struct pt_regs *uregs;
+    unsigned long len, prot, flags;
+
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return 0;
-    fired++;
-    pr_info("hmac_capture: mmap comm=%s pid=%d\n",
-            current->comm, current->pid);
+
+    uregs  = (struct pt_regs *)regs->regs[0];
+    len    = uregs->regs[1];
+    prot   = uregs->regs[2];
+    flags  = uregs->regs[3];
+
+    /* Log all mmaps so we can see what sizes/prots are used */
+    if (fired < 30) {
+        fired++;
+        pr_info("hmac_capture: mmap pid=%d len=0x%lx prot=0x%lx flags=0x%lx\n",
+                current->pid, len, prot, flags);
+    }
+
     return 0;
 }
 
