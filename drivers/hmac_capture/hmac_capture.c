@@ -14,7 +14,7 @@
 #include <asm/ptrace.h>
 
 #define HMAC_ENTRY  0x143ac
-#define HMAC_RET    0x4c048
+#define HMAC_RET    0x4c04c
 #define ANON_SIZE   0x78000
 #define TARGET_COMM "ar.tvplayer.tv"
 
@@ -44,9 +44,10 @@ static void hmac_entry_handler(struct perf_event *bp,
                                 struct pt_regs *regs)
 {
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return;
-    if (saved_x0) return;  /* only save first call */
+    if (saved_x0) return; /* only save first call */
     saved_x0 = regs->regs[0];
-    pr_info("hmac_capture: HMAC entry x0=0x%lx\n", saved_x0);
+    pr_info("hmac_capture: HMAC entry x0=0x%lx pid=%d\n",
+            saved_x0, current->pid);
 }
 
 static void hmac_ret_handler(struct perf_event *bp,
@@ -55,6 +56,8 @@ static void hmac_ret_handler(struct perf_event *bp,
 {
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return;
     if (!saved_x0) return;
+
+    pr_info("hmac_capture: ret fired reading from 0x%lx\n", saved_x0);
 
     if (copy_from_user(master_key, (void __user *)saved_x0, 32) == 0) {
         key_captured = 1;
@@ -72,7 +75,7 @@ static void hmac_ret_handler(struct perf_event *bp,
                 master_key[24],master_key[25],master_key[26],master_key[27],
                 master_key[28],master_key[29],master_key[30],master_key[31]);
     } else {
-        pr_err("hmac_capture: copy_from_user failed\n");
+        pr_err("hmac_capture: copy_from_user failed addr=0x%lx\n", saved_x0);
     }
     saved_x0 = 0;
 }
@@ -111,6 +114,7 @@ static void arm_work_fn(struct work_struct *work)
         put_task_struct(task);
         return;
     }
+    pr_info("hmac_capture: entry bp OK at 0x%lx\n", anon_base + HMAC_ENTRY);
 
     attr.bp_addr = anon_base + HMAC_RET;
     bp_ret = register_user_hw_breakpoint(&attr, hmac_ret_handler,
@@ -118,12 +122,11 @@ static void arm_work_fn(struct work_struct *work)
     if (IS_ERR(bp_ret)) {
         pr_err("hmac_capture: ret bp failed %ld\n", PTR_ERR(bp_ret));
         bp_ret = NULL;
+    } else {
+        pr_info("hmac_capture: ret bp OK at 0x%lx\n", anon_base + HMAC_RET);
     }
 
-    pr_info("hmac_capture: armed pid=%d anon=0x%lx entry=0x%lx ret=0x%lx\n",
-            pid, anon_base,
-            anon_base + HMAC_ENTRY,
-            anon_base + HMAC_RET);
+    pr_info("hmac_capture: armed pid=%d anon=0x%lx\n", pid, anon_base);
 
     put_task_struct(task);
     pending_anon_base = 0;
