@@ -88,9 +88,9 @@ static void hmac_entry_handler(struct perf_event *bp,
     }
 
     hw_breakpoint_init(&wattr);
-    wattr.bp_addr = saved_x0 + 28;
-    wattr.bp_len  = HW_BREAKPOINT_LEN_4;
-    wattr.bp_type = HW_BREAKPOINT_W;
+	wattr.bp_addr = saved_x0 + 28;
+	wattr.bp_len  = HW_BREAKPOINT_LEN_4;
+	wattr.bp_type = HW_BREAKPOINT_W;
 
     bp_ret = register_user_hw_breakpoint(&wattr, hmac_ret_handler,
                                           NULL, current);
