@@ -13,6 +13,7 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/mman.h>
+#include <asm/ptrace.h>
 
 #define HMAC_ENTRY  0x143ac
 #define HMAC_RET    0x1451c
@@ -180,44 +181,40 @@ static void arm_work_fn(struct work_struct *work)
         msleep(20);
         retries++;
     }
-    pr_err("hmac_capture: anon not found for pid=%d\n", pending_pid);
+    pr_err("hmac_capture: anon not found pid=%d\n", pending_pid);
     pending_pid = 0;
 }
 
-/* Kprobe on do_mmap - fires when anon segment is being created */
 static int mmap_handler(struct kprobe *kp, struct pt_regs *regs)
 {
+    /* __arm64_sys_mmap receives pt_regs pointer in x0 */
+    struct pt_regs *uregs = (struct pt_regs *)regs->regs[0];
     unsigned long len;
     unsigned long prot;
-    char comm[TASK_COMM_LEN];
 
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return 0;
     if (bp_entry) return 0;
     if (pending_pid) return 0;
 
-    /* do_mmap args: file, addr, len, prot, flags, vm_flags, pgoff, ... */
-    /* On arm64: x0=file x1=addr x2=len x3=prot x4=flags */
-    len  = regs->regs[2];
-    prot = regs->regs[3];
+    if (!uregs) return 0;
 
-    /* PROT_READ|PROT_EXEC = 5, size must be ANON_SIZE */
+    len  = uregs->regs[1];
+    prot = uregs->regs[2];
+
     if (len == ANON_SIZE && (prot & 0x5) == 0x5) {
-        get_task_comm(comm, current);
-        pr_info("hmac_capture: anon mmap detected comm=%s pid=%d len=0x%lx prot=0x%lx\n",
-                comm, current->pid, len, prot);
+        pr_info("hmac_capture: anon mmap pid=%d len=0x%lx prot=0x%lx\n",
+                current->pid, len, prot);
         pending_pid = current->pid;
-        /* Schedule with zero delay - arm immediately after mmap returns */
         schedule_delayed_work(&arm_work, msecs_to_jiffies(10));
     }
     return 0;
 }
 
 static struct kprobe kp = {
-    .symbol_name = "do_mmap",
+    .symbol_name = "__arm64_sys_mmap",
     .pre_handler = mmap_handler,
 };
 
-/* Manual trigger via /proc */
 static ssize_t hmac_write(struct file *file, const char __user *ubuf,
                            size_t count, loff_t *ppos)
 {
@@ -232,7 +229,7 @@ static ssize_t hmac_write(struct file *file, const char __user *ubuf,
 
     anon_base = find_anon_base(pid);
     if (!anon_base) {
-        pr_err("hmac_capture: anon not found for pid=%d\n", pid);
+        pr_err("hmac_capture: anon not found pid=%d\n", pid);
         return -ENOENT;
     }
     register_breakpoints(pid, anon_base);
@@ -274,12 +271,18 @@ static int __init hmac_capture_init(void)
 
     ret = register_kprobe(&kp);
     if (ret < 0) {
-        pr_err("hmac_capture: kprobe on do_mmap failed %d\n", ret);
-        return ret;
+        pr_err("hmac_capture: kprobe failed %d trying fallback\n", ret);
+        /* Try ksys_mmap_pgoff as fallback */
+        kp.symbol_name = "ksys_mmap_pgoff";
+        ret = register_kprobe(&kp);
+        if (ret < 0) {
+            pr_err("hmac_capture: fallback kprobe also failed %d\n", ret);
+            return ret;
+        }
     }
 
     proc_create("hmac_capture", 0666, NULL, &hmac_ops);
-    pr_info("hmac_capture: loaded watching for %s\n", TARGET_COMM);
+    pr_info("hmac_capture: loaded kprobe=%s\n", kp.symbol_name);
     return 0;
 }
 
