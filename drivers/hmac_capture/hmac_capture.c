@@ -185,21 +185,18 @@ static void arm_work_fn(struct work_struct *work)
     pending_pid = 0;
 }
 
-
-/* In wake_up_handler, only trigger on main thread */
 static int wake_up_handler(struct kprobe *kp, struct pt_regs *regs)
 {
     struct task_struct *task = (struct task_struct *)regs->regs[0];
     if (!task) return 0;
-
-    /* Only match main thread (tgid == pid) */
-    if (task->tgid != task->pid) return 0;
+    if (pending_pid) return 0;  /* already pending */
+    if (bp_entry) return 0;     /* already armed */
 
     if (strncmp(task->comm, TARGET_COMM, 14) == 0) {
-        pr_info("hmac_capture: detected main thread %s pid=%d\n",
+        pr_info("hmac_capture: detected %s pid=%d\n",
                 task->comm, task->pid);
         pending_pid = task->pid;
-	schedule_delayed_work(&arm_work, msecs_to_jiffies(200));
+        schedule_delayed_work(&arm_work, msecs_to_jiffies(50));
     }
     return 0;
 }
