@@ -7,28 +7,28 @@
 #define TARGET_COMM "ar.tvplayer.tv"
 #define ANON_SIZE   0x78000
 
-static int mmap_handler(struct kprobe *kp, struct pt_regs *regs)
+static int mprotect_handler(struct kprobe *kp, struct pt_regs *regs)
 {
     struct pt_regs *uregs;
-    unsigned long len, prot, flags;
+    unsigned long len, prot;
 
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return 0;
 
-    uregs  = (struct pt_regs *)regs->regs[0];
-    len    = uregs->regs[1];
-    prot   = uregs->regs[2];
-    flags  = uregs->regs[3];
-    if (prot & 0x4) {
-        pr_info("hmac_capture: exec mmap pid=%d len=0x%lx prot=0x%lx flags=0x%lx\n",
-                current->pid, len, prot, flags);
+    uregs = (struct pt_regs *)regs->regs[0];
+    len   = uregs->regs[1];
+    prot  = uregs->regs[2];
+
+    if (len == ANON_SIZE && (prot & 0x4)) {
+        pr_info("hmac_capture: ANON mprotect pid=%d len=0x%lx prot=0x%lx addr=0x%lx\n",
+                current->pid, len, prot, uregs->regs[0]);
     }
 
     return 0;
 }
 
 static struct kprobe kp = {
-    .symbol_name = "__arm64_sys_mmap",
-    .pre_handler = mmap_handler,
+    .symbol_name = "__arm64_sys_mprotect",
+    .pre_handler = mprotect_handler,
 };
 
 static int __init hmac_capture_init(void)
