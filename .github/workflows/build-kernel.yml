@@ -78,6 +78,16 @@ jobs:
           # 5. Finalize config
           make O=build_dir olddefconfig
 
+      - name: Add HMAC Capture Driver
+        run: |
+          # Create the driver source
+          cat > drivers/hmac_capture/hmac_capture.c << 'DRIVER_EOF'
+          // driver code here
+          DRIVER_EOF
+          
+          # Add Kconfig and Makefile
+          echo "obj-y += hmac_capture/" >> drivers/Makefile
+
       - name: Build Kernel
         run: |
           export ARCH=arm64
