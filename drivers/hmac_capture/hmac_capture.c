@@ -13,7 +13,7 @@
 #include <linux/workqueue.h>
 #include <asm/ptrace.h>
 
-#define HMAC_ENTRY  0x4c7d4
+#define HMAC_ENTRY  0x52c68
 #define ANON_SIZE   0x78000
 #define TARGET_COMM "ar.tvplayer.tv"
 
