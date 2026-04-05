@@ -12,6 +12,7 @@
 #include <linux/kprobes.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
+#include <linux/mman.h>
 
 #define HMAC_ENTRY  0x143ac
 #define HMAC_RET    0x1451c
@@ -160,7 +161,6 @@ static int register_breakpoints(pid_t pid, unsigned long anon_base)
     return 0;
 }
 
-/* Workqueue function - polls for anon segment after exec */
 static void arm_work_fn(struct work_struct *work)
 {
     unsigned long anon_base;
@@ -184,25 +184,37 @@ static void arm_work_fn(struct work_struct *work)
     pending_pid = 0;
 }
 
-static int wake_up_handler(struct kprobe *kp, struct pt_regs *regs)
+/* Kprobe on do_mmap - fires when anon segment is being created */
+static int mmap_handler(struct kprobe *kp, struct pt_regs *regs)
 {
-    struct task_struct *task = (struct task_struct *)regs->regs[0];
-    if (!task) return 0;
-    if (pending_pid) return 0;  /* already pending */
-    if (bp_entry) return 0;     /* already armed */
+    unsigned long len;
+    unsigned long prot;
+    char comm[TASK_COMM_LEN];
 
-    if (strncmp(task->comm, TARGET_COMM, 14) == 0) {
-        pr_info("hmac_capture: detected %s pid=%d\n",
-                task->comm, task->pid);
-        pending_pid = task->pid;
-		schedule_delayed_work(&arm_work, 0);
+    if (strncmp(current->comm, TARGET_COMM, 14) != 0) return 0;
+    if (bp_entry) return 0;
+    if (pending_pid) return 0;
+
+    /* do_mmap args: file, addr, len, prot, flags, vm_flags, pgoff, ... */
+    /* On arm64: x0=file x1=addr x2=len x3=prot x4=flags */
+    len  = regs->regs[2];
+    prot = regs->regs[3];
+
+    /* PROT_READ|PROT_EXEC = 5, size must be ANON_SIZE */
+    if (len == ANON_SIZE && (prot & 0x5) == 0x5) {
+        get_task_comm(comm, current);
+        pr_info("hmac_capture: anon mmap detected comm=%s pid=%d len=0x%lx prot=0x%lx\n",
+                comm, current->pid, len, prot);
+        pending_pid = current->pid;
+        /* Schedule with zero delay - arm immediately after mmap returns */
+        schedule_delayed_work(&arm_work, msecs_to_jiffies(10));
     }
     return 0;
 }
 
 static struct kprobe kp = {
-    .symbol_name = "wake_up_new_task",
-    .pre_handler = wake_up_handler,
+    .symbol_name = "do_mmap",
+    .pre_handler = mmap_handler,
 };
 
 /* Manual trigger via /proc */
@@ -262,12 +274,12 @@ static int __init hmac_capture_init(void)
 
     ret = register_kprobe(&kp);
     if (ret < 0) {
-        pr_err("hmac_capture: kprobe failed %d\n", ret);
+        pr_err("hmac_capture: kprobe on do_mmap failed %d\n", ret);
         return ret;
     }
 
     proc_create("hmac_capture", 0666, NULL, &hmac_ops);
-    pr_info("hmac_capture: loaded - watching for %s\n", TARGET_COMM);
+    pr_info("hmac_capture: loaded watching for %s\n", TARGET_COMM);
     return 0;
 }
 
