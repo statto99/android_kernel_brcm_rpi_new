@@ -18,11 +18,13 @@ static int mmap_handler(struct kprobe *kp, struct pt_regs *regs)
     len    = uregs->regs[1];
     prot   = uregs->regs[2];
     flags  = uregs->regs[3];
-
     if (prot & 0x4) {
         pr_info("hmac_capture: exec mmap pid=%d len=0x%lx prot=0x%lx flags=0x%lx\n",
                 current->pid, len, prot, flags);
     }
+
+    return 0;
+}
 
 static struct kprobe kp = {
     .symbol_name = "__arm64_sys_mmap",
