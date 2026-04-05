@@ -10,17 +10,18 @@
 static int mprotect_handler(struct kprobe *kp, struct pt_regs *regs)
 {
     struct pt_regs *uregs;
-    unsigned long len, prot;
+    u64 len, prot, addr;
 
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return 0;
 
     uregs = (struct pt_regs *)regs->regs[0];
+    addr  = uregs->regs[0];
     len   = uregs->regs[1];
     prot  = uregs->regs[2];
 
     if (len == ANON_SIZE && (prot & 0x4)) {
-        pr_info("hmac_capture: ANON mprotect pid=%d len=0x%lx prot=0x%lx addr=0x%lx\n",
-                current->pid, len, prot, uregs->regs[0]);
+        pr_info("hmac_capture: ANON mprotect pid=%d len=0x%llx prot=0x%llx addr=0x%llx\n",
+                current->pid, len, prot, addr);
     }
 
     return 0;
