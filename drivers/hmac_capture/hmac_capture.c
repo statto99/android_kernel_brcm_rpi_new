@@ -185,18 +185,21 @@ static void arm_work_fn(struct work_struct *work)
     pending_pid = 0;
 }
 
-/* Kprobe on wake_up_new_task to detect new processes */
+
+/* In wake_up_handler, only trigger on main thread */
 static int wake_up_handler(struct kprobe *kp, struct pt_regs *regs)
 {
     struct task_struct *task = (struct task_struct *)regs->regs[0];
     if (!task) return 0;
 
-    /* Check if this is TiviMate */
+    /* Only match main thread (tgid == pid) */
+    if (task->tgid != task->pid) return 0;
+
     if (strncmp(task->comm, TARGET_COMM, 14) == 0) {
-        pr_info("hmac_capture: detected %s pid=%d\n",
+        pr_info("hmac_capture: detected main thread %s pid=%d\n",
                 task->comm, task->pid);
         pending_pid = task->pid;
-        schedule_delayed_work(&arm_work, msecs_to_jiffies(500));
+	schedule_delayed_work(&arm_work, msecs_to_jiffies(200));
     }
     return 0;
 }
