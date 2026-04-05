@@ -14,7 +14,6 @@
 #include <asm/ptrace.h>
 
 #define HMAC_ENTRY  0x143ac
-#define HMAC_RET    0x4c04c
 #define ANON_SIZE   0x78000
 #define TARGET_COMM "ar.tvplayer.tv"
 
@@ -39,17 +38,6 @@ static void unregister_breakpoints(void)
     }
 }
 
-static void hmac_entry_handler(struct perf_event *bp,
-                                struct perf_sample_data *data,
-                                struct pt_regs *regs)
-{
-    if (strncmp(current->comm, TARGET_COMM, 14) != 0) return;
-    if (saved_x0) return; /* only save first call */
-    saved_x0 = regs->regs[0];
-    pr_info("hmac_capture: HMAC entry x0=0x%lx pid=%d\n",
-            saved_x0, current->pid);
-}
-
 static void hmac_ret_handler(struct perf_event *bp,
                               struct perf_sample_data *data,
                               struct pt_regs *regs)
@@ -57,7 +45,7 @@ static void hmac_ret_handler(struct perf_event *bp,
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return;
     if (!saved_x0) return;
 
-    pr_info("hmac_capture: ret fired reading from 0x%lx\n", saved_x0);
+    pr_info("hmac_capture: watchpoint fired reading from 0x%lx\n", saved_x0);
 
     if (copy_from_user(master_key, (void __user *)saved_x0, 32) == 0) {
         key_captured = 1;
@@ -78,6 +66,40 @@ static void hmac_ret_handler(struct perf_event *bp,
         pr_err("hmac_capture: copy_from_user failed addr=0x%lx\n", saved_x0);
     }
     saved_x0 = 0;
+}
+
+static void hmac_entry_handler(struct perf_event *bp,
+                                struct perf_sample_data *data,
+                                struct pt_regs *regs)
+{
+    struct perf_event_attr wattr;
+
+    if (strncmp(current->comm, TARGET_COMM, 14) != 0) return;
+    if (saved_x0) return;
+
+    saved_x0 = regs->regs[0];
+    pr_info("hmac_capture: HMAC entry x0=0x%lx pid=%d\n",
+            saved_x0, current->pid);
+
+    /* Replace ret bp with write watchpoint on last 4 bytes of output buffer */
+    if (bp_ret) {
+        unregister_hw_breakpoint(bp_ret);
+        bp_ret = NULL;
+    }
+
+    hw_breakpoint_init(&wattr);
+    wattr.bp_addr = saved_x0 + 28;
+    wattr.bp_len  = HW_BREAKPOINT_LEN_4;
+    wattr.bp_type = HW_BREAKPOINT_W;
+
+    bp_ret = register_user_hw_breakpoint(&wattr, hmac_ret_handler,
+                                          NULL, current);
+    if (IS_ERR(bp_ret)) {
+        pr_err("hmac_capture: watchpoint failed %ld\n", PTR_ERR(bp_ret));
+        bp_ret = NULL;
+    } else {
+        pr_info("hmac_capture: watchpoint at 0x%lx\n", saved_x0 + 28);
+    }
 }
 
 static void arm_work_fn(struct work_struct *work)
@@ -115,17 +137,6 @@ static void arm_work_fn(struct work_struct *work)
         return;
     }
     pr_info("hmac_capture: entry bp OK at 0x%lx\n", anon_base + HMAC_ENTRY);
-
-    attr.bp_addr = anon_base + HMAC_RET;
-    bp_ret = register_user_hw_breakpoint(&attr, hmac_ret_handler,
-                                          NULL, task);
-    if (IS_ERR(bp_ret)) {
-        pr_err("hmac_capture: ret bp failed %ld\n", PTR_ERR(bp_ret));
-        bp_ret = NULL;
-    } else {
-        pr_info("hmac_capture: ret bp OK at 0x%lx\n", anon_base + HMAC_RET);
-    }
-
     pr_info("hmac_capture: armed pid=%d anon=0x%lx\n", pid, anon_base);
 
     put_task_struct(task);
