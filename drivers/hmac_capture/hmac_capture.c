@@ -168,8 +168,7 @@ static void arm_work_fn(struct work_struct *work)
 
     if (!pending_pid) return;
 
-    /* Poll for anon segment - it gets mapped during JNI_OnLoad */
-    while (retries < 50) {
+    while (retries < 200) {
         anon_base = find_anon_base(pending_pid);
         if (anon_base) {
             pr_info("hmac_capture: found anon=0x%lx after %d retries\n",
@@ -178,7 +177,7 @@ static void arm_work_fn(struct work_struct *work)
             pending_pid = 0;
             return;
         }
-        msleep(100);
+        msleep(20);
         retries++;
     }
     pr_err("hmac_capture: anon not found for pid=%d\n", pending_pid);
@@ -196,7 +195,7 @@ static int wake_up_handler(struct kprobe *kp, struct pt_regs *regs)
         pr_info("hmac_capture: detected %s pid=%d\n",
                 task->comm, task->pid);
         pending_pid = task->pid;
-        schedule_delayed_work(&arm_work, msecs_to_jiffies(50));
+		schedule_delayed_work(&arm_work, 0);
     }
     return 0;
 }
