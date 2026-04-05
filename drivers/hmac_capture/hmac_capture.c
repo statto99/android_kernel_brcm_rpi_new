@@ -1,19 +1,18 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/sched.h>
-#include <linux/mm.h>
-#include <linux/uaccess.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
-#include <linux/slab.h>
 #include <linux/kprobes.h>
-#include <linux/workqueue.h>
 
 #define TARGET_COMM "ar.tvplayer.tv"
 
+static int fired = 0;
+
 static int mmap_handler(struct kprobe *kp, struct pt_regs *regs)
 {
-    pr_info("hmac_capture: mmap called comm=%s pid=%d\n",
+    if (fired > 10) return 0;
+    if (strncmp(current->comm, TARGET_COMM, 14) != 0) return 0;
+    fired++;
+    pr_info("hmac_capture: mmap comm=%s pid=%d\n",
             current->comm, current->pid);
     return 0;
 }
@@ -30,14 +29,13 @@ static int __init hmac_capture_init(void)
         pr_err("hmac_capture: kprobe failed %d\n", ret);
         return ret;
     }
-    pr_info("hmac_capture: loaded kprobe on %s\n", kp.symbol_name);
+    pr_info("hmac_capture: loaded\n");
     return 0;
 }
 
 static void __exit hmac_capture_exit(void)
 {
     unregister_kprobe(&kp);
-    pr_info("hmac_capture: unloaded\n");
 }
 
 module_init(hmac_capture_init);
