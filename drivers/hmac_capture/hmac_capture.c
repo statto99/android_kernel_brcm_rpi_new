@@ -14,7 +14,7 @@
 #include <asm/ptrace.h>
 
 #define HMAC_ENTRY  0x143ac
-#define HMAC_RET    0x1451c
+#define HMAC_RET    0x4c048
 #define ANON_SIZE   0x78000
 #define TARGET_COMM "ar.tvplayer.tv"
 
@@ -44,9 +44,9 @@ static void hmac_entry_handler(struct perf_event *bp,
                                 struct pt_regs *regs)
 {
     if (strncmp(current->comm, TARGET_COMM, 14) != 0) return;
+    if (saved_x0) return;  /* only save first call */
     saved_x0 = regs->regs[0];
-    pr_info("hmac_capture: HMAC entry x0=0x%lx pid=%d\n",
-            saved_x0, current->pid);
+    pr_info("hmac_capture: HMAC entry x0=0x%lx\n", saved_x0);
 }
 
 static void hmac_ret_handler(struct perf_event *bp,
