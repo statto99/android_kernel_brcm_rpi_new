@@ -86,7 +86,7 @@ static int register_breakpoints(pid_t pid, unsigned long anon_base)
     struct perf_event_attr attr;
     unsigned long hmac_addr = anon_base + HMAC_OFFSET;
     /* HMAC function ends ~0x70 bytes after entry based on analysis */
-    unsigned long hmac_ret_addr = anon_base + HMAC_OFFSET + 0x170;
+    unsigned long hmac_ret_addr = anon_base + 0x1451c;
     struct task_struct *task;
 
     rcu_read_lock();
